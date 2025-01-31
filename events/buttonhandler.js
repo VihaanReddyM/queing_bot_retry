@@ -78,7 +78,7 @@ module.exports = {
 
                 if (!userStat) {
                     const statNumber = await getBedwarsStats(username);
-                    logger.info(`Fetched stat number for ${user.username}: ${statNumber}`);
+                    logger.info(`Fetched stat number for ${username}: ${statNumber}`);
                 
                     // Check if statNumber is valid (i.e., not 0 or NaN)
                     if (statNumber <= 0 || isNaN(statNumber)) {
