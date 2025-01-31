@@ -29,7 +29,6 @@ for (const folder of commandFolders) {
         const command = require(filePath);
         if ('data' in command && 'execute' in command) {
             client.commands.set(command.data.name, command);
-            logger.info(`Loaded command: ${command.data.name}`);
         } else {
             logger.warn(`Command ${file} is missing data or execute function`);
         }
@@ -45,10 +44,8 @@ for (const file of eventFiles) {
     const event = require(filePath);
     if (event.once) {
         client.once(event.name, (...args) => event.execute(...args));
-        logger.info(`Loaded once event: ${event.name}`);
     } else {
         client.on(event.name, (...args) => event.execute(...args));
-        logger.info(`Loaded event: ${event.name}`);
     }
 }
 logger.info('Events loaded');
@@ -75,24 +72,24 @@ async function clearQueuesAndExit(exitCode) {
     process.exit(exitCode);
 }
 
-// // Handle process exits
-// process.on('SIGINT', () => clearQueuesAndExit(0));  // Handle CTRL+C
-// process.on('SIGTERM', () => clearQueuesAndExit(0)); // Handle termination (e.g., from hosting services)
+// Handle process exits
+process.on('SIGINT', () => clearQueuesAndExit(0));  // Handle CTRL+C
+process.on('SIGTERM', () => clearQueuesAndExit(0)); // Handle termination (e.g., from hosting services)
 
-// process.on('uncaughtException', (err) => {
-//     if (err.stack) {
-//         logger.error('Uncaught Exception:', err.stack); // Log the full stack trace if available
-//     } else {
-//         logger.error('Uncaught Exception:', err); // Log the error message if no stack trace is available
-//     }
-//     clearQueuesAndExit(1);
-// });
+process.on('uncaughtException', (err) => {
+    if (err.stack) {
+        logger.error('Uncaught Exception:', err.stack); // Log the full stack trace if available
+    } else {
+        logger.error('Uncaught Exception:', err); // Log the error message if no stack trace is available
+    }
+    clearQueuesAndExit(1);
+});
 
-// process.on('unhandledRejection', (reason, promise) => {
-//     if (reason.stack) {
-//         logger.error('Unhandled Promise Rejection:', reason.stack); // Log stack trace if available
-//     } else {
-//         logger.error('Unhandled Promise Rejection:', reason); // Log the rejection reason if no stack trace
-//     }
-//     clearQueuesAndExit(1);
-// });
+process.on('unhandledRejection', (reason, promise) => {
+    if (reason.stack) {
+        logger.error('Unhandled Promise Rejection:', reason.stack); // Log stack trace if available
+    } else {
+        logger.error('Unhandled Promise Rejection:', reason); // Log the rejection reason if no stack trace
+    }
+    clearQueuesAndExit(1);
+});
