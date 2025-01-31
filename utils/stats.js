@@ -24,7 +24,8 @@ async function getBedwarsStats(PLAYER_NAME) {
             `https://api.hypixel.net/player?name=${PLAYER_NAME}&key=${API_KEY}`
         );
         const player = response.data.player;
-
+        
+        // Check if player data is available and has stats
         if (player && player.stats && player.stats.Bedwars) {
             const bedwarsStats = player.stats.Bedwars;
 
@@ -39,24 +40,29 @@ async function getBedwarsStats(PLAYER_NAME) {
             // Calculate player score using the adjusted formula
             const playerScore =
                 (Weight_Kills * final_kills) +
-                (Weight_Kills_Bedwars * kills) -
-                (Weight_Deaths * final_deaths) -
-                (Weight_Deaths_Bedwars * deaths) +
-                (Weight_Wins * wins) -
-                (Weight_Losses * losses) +
+                (Weight_Kills_Bedwars * kills) - 
+                (Weight_Deaths * final_deaths) - 
+                (Weight_Deaths_Bedwars * deaths) + 
+                (Weight_Wins * wins) - 
+                (Weight_Losses * losses) + 
                 (Weight_Experience * experience);
 
             // Normalize the score using the scaling factor
             let normalizedScore = playerScore / scalingFactor;
             // Clamp score to a minimum value to prevent negative scores
             normalizedScore = Math.max(normalizedScore, MIN_SCORE);
+            if (normalizedScore === 0) {
+                normalizedScore = 4
+            }
             return normalizedScore;
 
         } else {
             logger.info("No BedWars stats found for this player.");
+            return MIN_SCORE;  // Return a default score if no stats found
         }
     } catch (error) {
         logger.error("Error fetching stats:", error);
+        return MIN_SCORE;  // Return a default score on error
     }
 }
 
