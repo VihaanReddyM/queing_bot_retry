@@ -1,0 +1,158 @@
+General Bot Usage
+🌱 (Seedling): Represents growth and starting fresh, like joining the queue.
+🍃 (Leaf Fluttering): Adds a peaceful, welcoming vibe.
+🌿 (Herb): Symbolizes customization or preferences.
+Queue Interface
+🌳 (Tree): Represents the core functionality of the bot.
+🌼 (Blossom): Indicates something positive or fun, like "Start Queue."
+🌾 (Sheaf of Rice): Could represent teamwork or progress in BedWars.
+Preferences
+🍂 (Falling Leaf): For selecting preferences or toggling between options.
+🌻 (Sunflower): Bright and happy for setting favorite game modes (2s, 3s, 4s).
+🍀 (Four-Leaf Clover): A lucky charm for players queuing up.
+Match Found / Success
+🌺 (Hibiscus): Bright and celebratory for match confirmation.
+🌷 (Tulip): A symbol of success or readiness.
+🌸 (Cherry Blossom): Adds a soft, exciting touch to indicate action.
+Queue Status
+🪴 (Potted Plant): Represents the "status" of the queue, like monitoring growth.
+🌵 (Cactus): Something quirky and fun for highlighting stats.
+🍇 (Grapes): Represents groups or clusters of players in the queue.
+Fun / Miscellaneous
+🥀 (Wilted Flower): Indicates an error or queue cancellation.
+🌙 (Moon and Stars): Adds a relaxing vibe to downtime or waiting periods.
+🌍 (Earth Globe): To make the bot feel connected and inclusive.
+Would you like me to help design specific sections or actions with these plant-themed emojis? 🌱
+
+
+
+const { EmbedBuilder } = require('discord.js');
+const ServerQueue = require('../utils/serverQueue');
+const logger = require('../utils/logger');
+const getUsername = require('../utils/username');
+const getBedwarsStats = require('../utils/stats');
+
+module.exports = {
+    name: 'interactionCreate',
+    async execute(interaction) {
+        if (!interaction.isButton()) return;
+
+        const { customId, user, guild } = interaction;
+
+        if (customId === 'join_queue') {
+            try {
+                // Check if the user is in a voice channel; if not, exit
+                if (!interaction.member.voice.channel) {
+                    const embed = new EmbedBuilder()
+                        .setTitle('Error')
+                        .setDescription('You must be in a voice channel to join the queue!')
+                        .setColor('#FF0000');
+
+                    return await interaction.reply({ embeds: [embed], flags: 64 });
+                }
+
+                await interaction.deferReply({ flags: 64 });
+
+                const serverId = guild.id; // Server ID
+                const serverName = guild.name; // Server name
+                const gameMode = '2'; // Hardcoded for now; make this dynamic later
+
+                // Check if the server document exists
+                let serverQueue = await ServerQueue.findById(serverId);
+
+                if (!serverQueue) {
+                    // Create a new server queue document
+                    serverQueue = new ServerQueue({
+                        _id: serverId,
+                        serverName,
+                        preferences: {}, // Default preferences
+                        usedStats: [], // Initialize usedStats array
+                        queue: { "2": [], "3": [], "4": [] },
+                    });
+
+                    // Save the new document
+                    await serverQueue.save();
+                }
+
+                // Check if the user already has a stat number in usedStats
+                const userStat = serverQueue.usedStats.find(stat => stat.userId === user.id);
+
+                if (!userStat) {
+                    // Assuming you fetch the stat number from your `stats` module
+                    member = await guild.members.fetch(user.id);
+                    nickname = member.nickname;
+                    const username = getUsername(nickname)
+                    const statNumber = await getBedwarsStats(username);
+
+                    console.log(`Fetched stat number: ${statNumber}`);  // Log the fetched stat number
+
+                    // Check if statNumber is valid (i.e., not 0 or NaN)
+                    if (statNumber <= 0 || isNaN(statNumber)) {
+                        const embed = new EmbedBuilder()
+                            .setTitle('Error')
+                            .setDescription(`Unable to fetch a valid stat number for ${user.username}. Please try again later.`)
+                            .setColor('#FF0000');
+
+                        await interaction.reply({ embeds: [embed], flags: 64 });
+                        return;  // Exit the function if stat number is invalid
+                    }
+
+                    // Add the user’s stat number to usedStats and queue
+                    serverQueue.usedStats.push({
+                        userId: user.id,
+                        statNumber,
+                    });
+                    serverQueue.queue[gameMode].push({
+                        userId: user.id,
+                        timestamp: new Date(),
+                        statNumber,  // Ensure valid statNumber
+                    });
+
+                    await serverQueue.save();
+                }
+
+                // Check if the user is already in the queue for the game mode
+                const userIndex = serverQueue.queue[gameMode].findIndex(
+                    (entry) => entry.userId === user.id
+                );
+
+                if (userIndex !== -1) {
+                    // Remove the user from the queue
+                    serverQueue.queue[gameMode].splice(userIndex, 1);
+                    await serverQueue.save();
+
+                    await interaction.editReply({
+                        content: `You were already in the **${gameMode}** queue and have been removed.`,
+                    });
+                    return;
+                }
+
+                // Add the user to the game mode queue
+                serverQueue.queue[gameMode].push({
+                    userId: user.id,
+                    timestamp: new Date(),
+                });
+
+                // Save the updated server queue
+                await serverQueue.save();
+
+                await interaction.editReply({
+                    content: `You've successfully joined the **${gameMode}** queue!`,
+                });
+            } catch (error) {
+                logger.error(error);
+
+                await interaction.editReply({
+                    content: 'There was an error processing your request. Please try again later.',
+                });
+            }
+        } else if (customId === 'set_preferences') {
+            const embed = new EmbedBuilder()
+                .setTitle('Preferences')
+                .setDescription(`${user.username}, use the preferences interface to customize your settings!`)
+                .setColor('#0000FF');
+
+            await interaction.reply({ embeds: [embed], flags: 64 });
+        }
+    },
+};
