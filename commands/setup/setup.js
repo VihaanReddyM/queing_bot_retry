@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
-const { logger } = require('../../utils/logger');
+const logger = require('../../utils/logger');
 const config = require('../../data/config.json');
 const mongoose = require('mongoose');
 const ServerQueue = require('../../utils/serverQueue');

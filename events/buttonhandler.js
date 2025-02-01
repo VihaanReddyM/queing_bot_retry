@@ -1,7 +1,7 @@
 const { EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle, ComponentBuilder } = require('discord.js');
 const ServerQueue = require('../utils/serverQueue');
 const logger = require('../utils/logger');
-const getUsername = require('../utils/username');
+const { getUsername, getstars } = require('../utils/username');
 const getUUID = require('../utils/uuid');
 const getBedwarsStats = require('../utils/stats');
 const matchmaking = require('../utils/matchmaking');
@@ -30,7 +30,8 @@ module.exports = {
 
                 // Save the new document
                 await serverQueue.save();
-                interaction.editReply('Please set up a category before joining the queue.');
+                await interaction.reply('Please set up a category before joining the queue.');
+                return; // Exit early after replying
             }
 
             const gameMode = serverQueue.preferences.get(user.id) || ["2", "3", "4"];
@@ -44,7 +45,8 @@ module.exports = {
                     return await interaction.reply({ embeds: [embed], flags: 64 });
                 }
 
-                await interaction.reply({ content: "Processing request...", flags: 64 });
+                // Defer the interaction to allow time for processing
+                await interaction.deferReply({ flags: 64 });
 
                 const member = await guild.members.fetch(user.id);
 
@@ -54,7 +56,7 @@ module.exports = {
                         .setDescription('Unable to fetch your username. Please set a nickname and try again.')
                         .setColor('#FF0000');
 
-                    await interaction.editReply({ embeds: [embed], flags: 64 });
+                    await interaction.editReply({ embeds: [embed] });
                     return;
                 }
 
@@ -68,7 +70,7 @@ module.exports = {
                         .setDescription('Please set up a category before joining the queue.')
                         .setColor('#FF0000');
 
-                    await interaction.editReply({ embeds: [embed], flags: 64 });
+                    await interaction.editReply({ embeds: [embed] });
                     return;
                 }
 
@@ -77,29 +79,31 @@ module.exports = {
                 );
 
                 if (!userStat) {
-                    const statNumber = await getBedwarsStats(username);
-                    logger.info(`Fetched stat number for ${username}: ${statNumber}`);
-                
-                    // Check if statNumber is valid (i.e., not 0 or NaN)
-                    if (statNumber <= 0 || isNaN(statNumber)) {
+                    const statNumber = await getBedwarsStats(nickname);
+                    const stars = await getstars(nickname); // Fetch stars data
+                    logger.info(`Fetched stat number for ${nickname}: ${statNumber}`);
+                    logger.info(`Fetched stars for ${nickname}: ${stars}`);
+
+                    // Check if statNumber and stars are valid (i.e., not 0 or NaN)
+                    if (statNumber <= 0 || isNaN(statNumber) || stars <= 0 || isNaN(stars)) {
                         const embed = new EmbedBuilder()
                             .setTitle('Error')
-                            .setDescription(`Unable to fetch a valid stat number for ${user.username}. Please try again later.`)
+                            .setDescription(`Unable to fetch valid stats for ${user.username}. Please try again later.`)
                             .setColor('#FF0000');
-                
-                        await interaction.reply({ embeds: [embed], flags: 64 });
+
+                        await interaction.editReply({ embeds: [embed] });
                         return;
                     }
-                
+
                     serverQueue.usedStats.push({
                         userId: UUID,
                         statNumber,
+                        stars, // Save stars data
                     });
-                
-                    userStat = { userId: UUID, statNumber }; // Set the fetched statNumber for the user
+
+                    userStat = { userId: UUID, statNumber, stars }; // Set the fetched statNumber and stars for the user
                     logger.info("New user and his stats are: ", userStat);
                 }
-                
 
                 let wasInQueue = false;
                 for (const mode of gameMode) {
@@ -121,7 +125,7 @@ module.exports = {
                         .setDescription(`You've successfully left all selected queues!`)
                         .setColor('#00FF00');
 
-                    await interaction.editReply({ embeds: [embed], flags: 64 });
+                    await interaction.editReply({ embeds: [embed] });
                     return;
                 }
 
@@ -138,6 +142,7 @@ module.exports = {
                         userId: user.id,
                         timestamp: new Date(),
                         statNumber: userStat.statNumber,
+                        stars: userStat.stars, // Include stars in the queue entry
                     });
                 }
 
@@ -148,7 +153,7 @@ module.exports = {
                     .setDescription(`You have joined the **${gameMode}** queue!`)
                     .setColor('#00FF00');
 
-                await interaction.editReply({ embeds: [embed], flags: 64 });
+                await interaction.editReply({ embeds: [embed] });
 
                 for (const mode of gameMode) {
                     if (serverQueue.queue[mode] && Array.isArray(serverQueue.queue[mode]) && serverQueue.queue[mode].length >= 2) {
@@ -198,9 +203,9 @@ module.exports = {
             if (wasInQueue) {
                 const embed = new EmbedBuilder()
                     .setTitle('Error')
-                    .setDescription(`You cant edit your preferences while in queue.`)
+                    .setDescription(`You can't edit your preferences while in queue.`)
                     .setColor('#FF0000');
-                
+
                 logger.info(`User ${user.username} tried to edit preferences while in queue.`);
                 return await interaction.reply({ embeds: [embed], flags: 64 });
             }

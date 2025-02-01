@@ -58,11 +58,11 @@ async function getBedwarsStats(PLAYER_NAME) {
 
         } else {
             logger.info("No BedWars stats found for this player.");
-            return MIN_SCORE;  // Return a default score if no stats found
+            return 1000;  // Return a default score if no stats found
         }
     } catch (error) {
         logger.error("Error fetching stats:", error);
-        return MIN_SCORE;  // Return a default score on error
+        return 1000;  // Return a default score on error
     }
 }
 

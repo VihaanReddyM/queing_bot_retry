@@ -11,6 +11,7 @@ const serverQueueSchema = new mongoose.Schema({
         {
             userId: { type: String, required: true, index: true }, // Indexed for better performance
             statNumber: { type: Number, required: true },
+            stars: { type: Number, required: true },
         }
     ],
     queue: {
@@ -18,6 +19,7 @@ const serverQueueSchema = new mongoose.Schema({
             {
                 userId: { type: String, required: true },
                 statNumber: { type: Number, required: true },
+                stars: { type: Number, required: true },
                 timestamp: { type: Date, default: Date.now },
             },
         ],
@@ -25,6 +27,7 @@ const serverQueueSchema = new mongoose.Schema({
             {
                 userId: { type: String, required: true },
                 statNumber: { type: Number, required: true },
+                stars: { type: Number, required: true },
                 timestamp: { type: Date, default: Date.now },
             },
         ],
@@ -32,6 +35,7 @@ const serverQueueSchema = new mongoose.Schema({
             {
                 userId: { type: String, required: true },
                 statNumber: { type: Number, required: true },
+                stars: { type: Number, required: true },
                 timestamp: { type: Date, default: Date.now },
             },
         ],
