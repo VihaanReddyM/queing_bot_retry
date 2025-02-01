@@ -4,9 +4,10 @@ function getUsername(input) {
 }
 
 function getstars(input) {
-  const match = input.match(/\[(\d+)\s*[⭐]*/); // Match numbers after '[' with optional spaces/stars
+  const match = input.match(/\[\s*(\d+)\s*[⭐🌠]*/);
   if (!match) {
     console.error(`No stars found in nickname: ${input}`);
+    return NaN; // or handle the error appropriately
   }
   return parseInt(match[1], 10);
 }

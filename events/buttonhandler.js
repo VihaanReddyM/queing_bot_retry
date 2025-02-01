@@ -129,13 +129,14 @@ module.exports = {
                     return;
                 }
 
-                for (const mode of gameMode) {
-                    if (serverQueue.queue[mode] && Array.isArray(serverQueue.queue[mode]) && serverQueue.queue[mode].length >= 2) {
-                        logger.info("Matchmaking started for server: ", serverId);
-                        await matchmaking(serverId, interaction.client);
-                        break; // Exit loop after starting matchmaking
-                    }
-                }
+                // Removed manual matchmaking call from here:
+                // for (const mode of gameMode) {
+                //     if (serverQueue.queue[mode] && Array.isArray(serverQueue.queue[mode]) && serverQueue.queue[mode].length >= 2) {
+                //         logger.info("Matchmaking started for server: ", serverId);
+                //         await matchmaking(serverId, interaction.client);
+                //         break; // Exit loop after starting matchmaking
+                //     }
+                // }
 
                 for (const mode of gameMode) {
                     serverQueue.queue[mode].push({
@@ -155,13 +156,14 @@ module.exports = {
 
                 await interaction.editReply({ embeds: [embed] });
 
-                for (const mode of gameMode) {
-                    if (serverQueue.queue[mode] && Array.isArray(serverQueue.queue[mode]) && serverQueue.queue[mode].length >= 2) {
-                        logger.info("Matchmaking started for server: ", serverId);
-                        const matchedTeams = await matchmaking(serverId, interaction.client);
-                        break; // Exit loop after starting matchmaking
-                    }
-                }
+                // Removed second manual matchmaking call from here:
+                // for (const mode of gameMode) {
+                //     if (serverQueue.queue[mode] && Array.isArray(serverQueue.queue[mode]) && serverQueue.queue[mode].length >= 2) {
+                //         logger.info("Matchmaking started for server: ", serverId);
+                //         const matchedTeams = await matchmaking(serverId, interaction.client);
+                //         break; // Exit loop after starting matchmaking
+                //     }
+                // }
 
             } catch (error) {
                 logger.error(error);
