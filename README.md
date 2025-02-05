@@ -7,7 +7,6 @@ you need to add a data folder and inside add a config.json with the following fo
     "clientid": "",
     "guildid": "",
     "mongoDB": "",
-    "polsu": "",
     "hypixel": "",
 
     "developers": [""],
