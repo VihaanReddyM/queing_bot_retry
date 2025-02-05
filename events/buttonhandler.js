@@ -4,7 +4,6 @@ const logger = require('../utils/logger');
 const { getUsername, getstars } = require('../utils/username');
 const getUUID = require('../utils/uuid');
 const getBedwarsStats = require('../utils/stats');
-const matchmaking = require('../utils/matchmaking');
 
 module.exports = {
     name: 'interactionCreate',

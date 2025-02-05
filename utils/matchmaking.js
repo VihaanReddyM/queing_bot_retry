@@ -2,10 +2,15 @@ const mongoose = require('mongoose');
 const ServerQueue = require('./serverQueue');
 const logger = require('./logger');
 const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const { getstars } = require('./username');
 
+/**
+ * Main matchmaking function.
+ * Processes mode "4" (4s) instantly,
+ * then processes mode "3" (3s) and "2" (2s) with a waiting/promoting period.
+ */
 async function matchmaking(serverId, client) {
     try {
+        // Retrieve the server queue and guild
         const serverQueue = await ServerQueue.findById(serverId);
         if (!serverQueue) {
             logger.error('Server queue not found');
@@ -18,27 +23,23 @@ async function matchmaking(serverId, client) {
             return;
         }
 
-        const categoryId = serverQueue.category;
-        if (!categoryId) {
+        if (!serverQueue.category) {
             logger.error(`No category set for serverId: ${serverId}`);
             return;
         }
 
-        // Prioritize game modes: 4s over 3s and 2s.
-        // Our custom staged algorithm will only affect mode "2".
-        const gameModes = ['4', '3', '2'];
-        const matchedTeams = [];
-        const currentTime = Date.now();
+        // === HELPER FUNCTIONS ===
 
-        // Helper: Convert stars into an equivalent stat value.
+        // Converts stars to a stat value.
         function convertStarsToStat(stars) {
             if (stars < 100) return 2;   // low experience
             if (stars < 400) return 6;   // mid-tier
             return 10;                   // high experience
         }
 
-        // Hybrid bracket function: uses statNumber (if available) and stars.
+        // Hybrid bracket calculation based on statNumber and stars.
         function getBracket(statNumber, stars) {
+            logger.info(`Calculating bracket for statNumber ${statNumber} and stars ${stars}`);
             if (statNumber === 1000) {
                 const converted = convertStarsToStat(stars);
                 if (converted <= 3) return 1;
@@ -52,12 +53,13 @@ async function matchmaking(serverId, client) {
             }
         }
 
-        // Helper: random integer between min and max (inclusive)
+        // Random integer between min and max (inclusive)
         function randomBetween(min, max) {
+            logger.info(`Generating random number between ${min} and ${max}`);
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
 
-        // For eligibility: if not set, assume eligible.
+        // Eligibility functions – if not set, assume eligible.
         function isEligibleFor3(player) {
             return (player.eligibility3 === undefined) ? true : player.eligibility3;
         }
@@ -65,141 +67,259 @@ async function matchmaking(serverId, client) {
             return (player.eligibility4 === undefined) ? true : player.eligibility4;
         }
 
-        // Helper: Process matches for a given mode by grouping players by bracket.
-        function processMatchForMode(mode, players) {
-            // First, assign bracket for each player.
-            players.forEach(player => {
-                player.bracket = getBracket(player.statNumber, player.stars);
-            });
-            // Group players by bracket.
-            const groups = {};
-            players.forEach(player => {
-                if (!groups[player.bracket]) groups[player.bracket] = [];
-                groups[player.bracket].push(player);
-            });
-            // Determine the number of players per match from the mode string.
-            const playersPerMatch = parseInt(mode);
-            for (const bracket in groups) {
-                const groupPlayers = groups[bracket];
-                while (groupPlayers.length >= playersPerMatch) {
-                    const matchedPlayers = groupPlayers.splice(0, playersPerMatch);
-                    matchedTeams.push({
-                        mode,
-                        bracket: bracket,
-                        players: matchedPlayers,
-                        matchedAt: Date.now()
-                    });
+        // Remove a player from all queues (so they cannot be matched twice).
+        function removePlayerFromAllQueues(playerId) {
+            logger.info(`Removing player ${playerId} from all queues`);
+            ["2", "3", "4"].forEach(mode => {
+                if (serverQueue.queue[mode]) {
+                    serverQueue.queue[mode] = serverQueue.queue[mode].filter(p => p.userId !== playerId);
                 }
-            }
+            });
         }
 
-        // Helper: Process the "2s" queue with custom waiting and promotion logic.
-        async function processModeQueue(mode) {
-            // Custom logic applies only to mode "2"
-            if (mode === "2") {
-                // Re-read the current queue state from serverQueue.queue["2"]
-                let currentQueue = serverQueue.queue["2"] || [];
-                if (currentQueue.length === 2) {
-                    const waitTime = randomBetween(14, 24) * 1000;
-                    logger.info(`Mode 2: Waiting ${waitTime / 1000} seconds for additional players.`);
-                    await new Promise(resolve => setTimeout(resolve, waitTime));
-                    // After waiting, re-read the queue state.
-                    currentQueue = serverQueue.queue["2"] || [];
-                    if (currentQueue.length !== 2) {
-                        logger.info("Queue size changed during wait, processing in 2s mode immediately.");
-                        processMatchForMode("2", currentQueue);
-                        return;
-                    }
-                    // Check if all players are eligible for promotion to 3s.
-                    const allEligibleFor3 = currentQueue.every(player => isEligibleFor3(player));
-                    if (allEligibleFor3) {
-                        // Promote: clear the 2s queue and add these players to the 3s queue.
-                        serverQueue.queue["2"] = [];
-                        if (!serverQueue.queue["3"]) serverQueue.queue["3"] = [];
-                        // Use a copy of currentQueue to avoid reference issues.
-                        const promotedPlayers = currentQueue.slice();
-                        serverQueue.queue["3"] = serverQueue.queue["3"].concat(promotedPlayers);
-                        logger.info("Promoted players from 2s to 3s queue.");
-
-                        // Wait again before promoting from 3s to 4s.
-                        const waitTime3 = randomBetween(14, 24) * 1000;
-                        logger.info(`Mode 3: Waiting ${waitTime3 / 1000} seconds for further players.`);
-                        await new Promise(resolve => setTimeout(resolve, waitTime3));
-                        let queue3 = serverQueue.queue["3"] || [];
-                        if (queue3.length === 0) {
-                            logger.info("No players in 3s queue after wait.");
-                            return;
-                        }
-                        const allEligibleFor4 = queue3.every(player => isEligibleFor4(player));
-                        if (allEligibleFor4) {
-                            // Promote to mode 4 instantly.
-                            serverQueue.queue["3"] = [];
-                            if (!serverQueue.queue["4"]) serverQueue.queue["4"] = [];
-                            const promotedPlayers4 = queue3.slice();
-                            serverQueue.queue["4"] = serverQueue.queue["4"].concat(promotedPlayers4);
-                            logger.info("Promoted players from 3s to 4s queue instantly.");
-                            processMatchForMode("4", serverQueue.queue["4"]);
-                        } else {
-                            // Not all players can go to 4s; process them as a 3s match.
-                            processMatchForMode("3", queue3);
-                        }
-                    } else {
-                        // Some players are ineligible for promotion; process in 2s mode immediately.
-                        processMatchForMode("2", currentQueue);
-                    }
-                } else {
-                    // If queue length is not exactly 2, process immediately.
-                    processMatchForMode("2", currentQueue);
-                }
-            } else {
-                // For mode "3" or "4", simply process the matches.
-                processMatchForMode(mode, serverQueue.queue[mode] || []);
-            }
-        }
-
-        // Main processing loop for each game mode.
-        for (const mode of gameModes) {
-            let queue = serverQueue.queue[mode];
-            if (!queue) {
-                logger.error(`No queue found for game mode ${mode}`);
-                continue;
-            }
-            // For each player in the current queue, recalculate their bracket.
-            queue.forEach(player => {
-                player.bracket = getBracket(player.statNumber, player.stars);
-            });
-
-            if (mode === "2") {
-                // Use our custom waiting/promoting function for mode "2".
-                await processModeQueue("2");
-            } else {
-                // For modes "3" and "4", group players by bracket and form matches immediately.
-                const groups = {};
-                queue.forEach(player => {
-                    if (!groups[player.bracket]) groups[player.bracket] = [];
-                    groups[player.bracket].push(player);
+        // Create a voice channel for a matched team and return it.
+        async function createVoiceChannel(guild, team) {
+            const categoryId = serverQueue.category;
+            const channelName = `Team-${team.players.map(p => p.userId).join('-')}`;
+            try {
+                const channel = await guild.channels.create({
+                    name: channelName,
+                    type: 2, // Discord voice channel type
+                    parent: categoryId,
                 });
-                const playersPerMatch = parseInt(mode);
-                for (const bracket in groups) {
-                    const players = groups[bracket];
-                    while (players.length >= playersPerMatch) {
-                        const matchedPlayers = players.splice(0, playersPerMatch);
-                        matchedTeams.push({
-                            mode,
-                            bracket,
-                            players: matchedPlayers,
-                            matchedAt: Date.now()
-                        });
-                    }
+                logger.info(`Created voice channel ${channel.name} for team.`);
+                return channel;
+            } catch (err) {
+                logger.error(`Error creating voice channel: ${err.message}`);
+                return null;
+            }
+        }
+
+        // === MATCHED TEAMS COLLECTION ===
+        const matchedTeams = [];
+
+        // === MODE 4 (4s) – Highest Priority, Instant Matching ===
+        {
+            // Ensure we have a valid array
+            let mode4Queue = serverQueue.queue["4"] || [];
+            // Recalculate bracket for each player in mode4 queue
+            mode4Queue.forEach(player => {
+                player.bracket = getBracket(player.statNumber, player.stars);
+            });
+            // Group players by bracket
+            const groups4 = {};
+            mode4Queue.forEach(player => {
+                if (!groups4[player.bracket]) groups4[player.bracket] = [];
+                groups4[player.bracket].push(player);
+            });
+
+            // For each bracket, instantly match teams of 4.
+            for (const bracket in groups4) {
+                while (groups4[bracket].length >= 4) {
+                    const teamPlayers = groups4[bracket].splice(0, 4);
+                    // Remove these players from all queues.
+                    teamPlayers.forEach(player => removePlayerFromAllQueues(player.userId));
+                    const team = {
+                        mode: "4",
+                        bracket,
+                        players: teamPlayers,
+                        matchedAt: Date.now()
+                    };
+                    // Create a voice channel and store it in the team object.
+                    const channel = await createVoiceChannel(guild, team);
+                    if (channel) team.channel = channel;
+                    matchedTeams.push(team);
+                    logger.info(`Matched team for 4s in bracket ${bracket}: ${team.players.map(p => p.userId).join(', ')}`);
                 }
             }
         }
 
-        // Log the matched teams.
+        // === MODE 3 (3s) – Waiting and Promotion Logic ===
+        {
+            let mode3Queue = serverQueue.queue["3"] || [];
+            mode3Queue.forEach(player => {
+                player.bracket = getBracket(player.statNumber, player.stars);
+            });
+            // Group by bracket.
+            const groups3 = {};
+            mode3Queue.forEach(player => {
+                if (!groups3[player.bracket]) groups3[player.bracket] = [];
+                groups3[player.bracket].push(player);
+            });
+
+            // Process each bracket group in mode 3.
+            async function processMode3Group(bracket) {
+                let group = groups3[bracket];
+                while (group && group.length >= 3) {
+                    // Take an initial team of 3.
+                    const initialTeam = group.splice(0, 3);
+                    // Also remove these players from the main mode 3 queue.
+                    initialTeam.forEach(player => {
+                        serverQueue.queue["3"] = serverQueue.queue["3"].filter(p => p.userId !== player.userId);
+                    });
+
+                    // Wait for 10-20 seconds for possible promotion.
+                    const waitTime = randomBetween(10, 20) * 1000;
+                    logger.info(`Mode 3: Waiting ${waitTime / 1000} seconds for promotion in bracket ${bracket}.`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+
+                    // Re-check the current mode 3 queue for players in this bracket.
+                    let currentGroup = (serverQueue.queue["3"] || []).filter(p => {
+                        p.bracket = getBracket(p.statNumber, p.stars);
+                        return p.bracket === bracket;
+                    });
+
+                    // If at least one extra player is available and all are eligible for promotion to 4s...
+                    if (currentGroup.length >= 1) {
+                        const candidate = currentGroup[0];
+                        if (initialTeam.every(p => isEligibleFor4(p)) && isEligibleFor4(candidate)) {
+                            // Remove candidate from mode 3.
+                            serverQueue.queue["3"] = serverQueue.queue["3"].filter(p => p.userId !== candidate.userId);
+                            initialTeam.push(candidate);
+                            // Remove all matched players from any queue.
+                            initialTeam.forEach(player => removePlayerFromAllQueues(player.userId));
+                            const team = {
+                                mode: "4", // promoted to 4s team
+                                bracket,
+                                players: initialTeam,
+                                matchedAt: Date.now()
+                            };
+                            const channel = await createVoiceChannel(guild, team);
+                            if (channel) team.channel = channel;
+                            matchedTeams.push(team);
+                            logger.info(`Promoted team from 3s to 4s in bracket ${bracket}: ${team.players.map(p => p.userId).join(', ')}`);
+                            continue;
+                        }
+                    }
+                    // Otherwise, finalize the team as a 3s team.
+                    initialTeam.forEach(player => removePlayerFromAllQueues(player.userId));
+                    const team = {
+                        mode: "3",
+                        bracket,
+                        players: initialTeam,
+                        matchedAt: Date.now()
+                    };
+                    const channel = await createVoiceChannel(guild, team);
+                    if (channel) team.channel = channel;
+                    matchedTeams.push(team);
+                    logger.info(`Matched team for 3s in bracket ${bracket}: ${team.players.map(p => p.userId).join(', ')}`);
+                }
+            }
+
+            // Process each bracket concurrently.
+            await Promise.all(Object.keys(groups3).map(bracket => processMode3Group(bracket)));
+        }
+
+        // === MODE 2 (2s) – Waiting and Promotion Logic ===
+        {
+            let mode2Queue = serverQueue.queue["2"] || [];
+            mode2Queue.forEach(player => {
+                player.bracket = getBracket(player.statNumber, player.stars);
+            });
+            // Group by bracket.
+            const groups2 = {};
+            mode2Queue.forEach(player => {
+                if (!groups2[player.bracket]) groups2[player.bracket] = [];
+                groups2[player.bracket].push(player);
+            });
+
+            async function processMode2Group(bracket) {
+                let group = groups2[bracket];
+                while (group && group.length >= 2) {
+                    // Take an initial team of 2.
+                    const initialTeam = group.splice(0, 2);
+                    // Also remove these players from the main mode 2 queue.
+                    initialTeam.forEach(player => {
+                        serverQueue.queue["2"] = serverQueue.queue["2"].filter(p => p.userId !== player.userId);
+                    });
+
+                    // Wait for 10-20 seconds for possible promotion.
+                    const waitTime = randomBetween(10, 20) * 1000;
+                    logger.info(`Mode 2: Waiting ${waitTime / 1000} seconds for promotion in bracket ${bracket}.`);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+
+                    // Re-check the current mode 2 queue for players in this bracket.
+                    let currentGroup = (serverQueue.queue["2"] || []).filter(p => {
+                        p.bracket = getBracket(p.statNumber, p.stars);
+                        return p.bracket === bracket;
+                    });
+
+                    // If at least one extra player is available and all are eligible for promotion to 3s...
+                    if (currentGroup.length >= 1) {
+                        const candidate = currentGroup[0];
+                        if (initialTeam.every(p => isEligibleFor3(p)) && isEligibleFor3(candidate)) {
+                            // Remove candidate from mode 2.
+                            serverQueue.queue["2"] = serverQueue.queue["2"].filter(p => p.userId !== candidate.userId);
+                            initialTeam.push(candidate);
+                            initialTeam.forEach(player => removePlayerFromAllQueues(player.userId));
+                            const team = {
+                                mode: "3", // promoted to a 3s team
+                                bracket,
+                                players: initialTeam,
+                                matchedAt: Date.now()
+                            };
+                            const channel = await createVoiceChannel(guild, team);
+                            if (channel) team.channel = channel;
+                            matchedTeams.push(team);
+                            logger.info(`Promoted team from 2s to 3s in bracket ${bracket}: ${team.players.map(p => p.userId).join(', ')}`);
+                            continue;
+                        }
+                    }
+                    // Otherwise, finalize the team as a 2s team.
+                    initialTeam.forEach(player => removePlayerFromAllQueues(player.userId));
+                    const team = {
+                        mode: "2",
+                        bracket,
+                        players: initialTeam,
+                        matchedAt: Date.now()
+                    };
+                    const channel = await createVoiceChannel(guild, team);
+                    if (channel) team.channel = channel;
+                    matchedTeams.push(team);
+                    logger.info(`Matched team for 2s in bracket ${bracket}: ${team.players.map(p => p.userId).join(', ')}`);
+                }
+            }
+
+            // Process each bracket concurrently.
+            await Promise.all(Object.keys(groups2).map(bracket => processMode2Group(bracket)));
+        }
+
+        // Log all matched teams.
         matchedTeams.forEach(team => {
-            logger.info(`Matched team for mode ${team.mode} in bracket ${team.bracket}: ${team.players.map(p => p.userId).join(', ')}`);
-            // Here you can create voice channels or send match notifications as needed.
+            logger.info(`Final matched team for mode ${team.mode} in bracket ${team.bracket}: ${team.players.map(p => p.userId).join(', ')}`);
         });
+
+        // Save the updated queue using updateOne()
+        await ServerQueue.updateOne({ _id: serverId }, { queue: serverQueue.queue });
+
+        // ----- AFTER THE QUEUE IS SAVED, MOVE MATCHED USERS INTO THEIR VOICE CHANNELS -----
+
+        // Iterate over each team and move each member into the team's voice channel.
+        for (const team of matchedTeams) {
+            if (team.channel) {
+                for (const player of team.players) {
+                    try {
+                        // Get the guild member (fetching if not cached)
+                        let member = guild.members.cache.get(player.userId);
+                        if (!member) {
+                            member = await guild.members.fetch(player.userId);
+                        }
+
+                        // Check if the member is connected to a voice channel;
+                        // only then can we move them.
+                        if (member.voice.channel) {
+                            await member.voice.setChannel(team.channel.id);
+                            logger.info(`Moved ${member.user.tag} to ${team.channel.name}`);
+                        } else {
+                            // Optionally, you could send them a DM or a notification asking them to join.
+                            logger.info(`Member ${member.user.tag} is not in a voice channel and cannot be moved automatically.`);
+                        }
+                    } catch (err) {
+                        logger.error(`Failed to move member ${player.userId}: ${err.message}`);
+                    }
+                }
+            }
+        }
 
     } catch (error) {
         logger.error(`Error matching users: ${error.message}`);

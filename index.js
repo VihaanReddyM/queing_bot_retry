@@ -5,7 +5,9 @@ const data = require('./data/config.json');
 const logger = require('./utils/logger');
 const connectDB = require('./utils/mongoose');
 const ServerQueue = require('./utils/serverQueue');
+const matchmaking = require('./utils/matchmaking');
 
+// Connect to MongoDB
 connectDB();
 
 const client = new Client({
@@ -52,6 +54,38 @@ logger.info('Events loaded');
 
 client.login(data.token);
 
+// Flag to check if matchmaking is running
+let isMatchmakingRunning = false;
+
+// Function to start listening to database changes (using Mongoose change streams)
+const startListeningToDatabaseChanges = () => {
+    const changeStream = ServerQueue.watch();
+
+    changeStream.on('change', async (change) => {
+        // Only trigger matchmaking if not already running
+        if (isMatchmakingRunning) {
+            return;
+        }
+
+        // Trigger matchmaking when there's a change in the database
+        console.log('Database change detected, starting matchmaking...');
+        isMatchmakingRunning = true;
+
+        try {
+            // Call your matchmaking function
+            await matchmaking("1235584667982364712", client);
+        } catch (error) {
+            console.error('Error during matchmaking:', error);
+        } finally {
+            // Mark matchmaking as finished
+            isMatchmakingRunning = false;
+        }
+    });
+};
+
+// Start listening to changes
+startListeningToDatabaseChanges();
+
 // Function to clear queues before exiting
 async function clearQueuesAndExit(exitCode) {
     logger.info('Clearing all queues before shutdown...');
@@ -72,7 +106,7 @@ async function clearQueuesAndExit(exitCode) {
     process.exit(exitCode);
 }
 
-// // Handle process exits
+// Handle process exits
 // process.on('SIGINT', () => clearQueuesAndExit(0));  // Handle CTRL+C
 // process.on('SIGTERM', () => clearQueuesAndExit(0)); // Handle termination (e.g., from hosting services)
 
