@@ -1,8 +1,7 @@
 you need to add a data folder and inside add a config.json with the following format
 
-"""
-{
 
+{
     "token": "",
     "clientid": "",
     "guildid": "",
@@ -23,4 +22,4 @@ you need to add a data folder and inside add a config.json with the following fo
         
     }
 }
-"""
+
