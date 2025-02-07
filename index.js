@@ -68,7 +68,7 @@ const startListeningToDatabaseChanges = () => {
         }
 
         // Trigger matchmaking when there's a change in the database
-        console.log('Database change detected, starting matchmaking...');
+        logger.info('Detected a change in the database. Triggering matchmaking...');
         isMatchmakingRunning = true;
 
         try {
