@@ -103,7 +103,7 @@ async function matchmaking(serverId, client) {
         }
 
         // Create a voice channel for a matched team and return it.
-        async function createVoiceChannel(guild, team) {
+        async function createVoiceChannel(guild, team, teamsize) {
             const categoryId = serverQueue.category;
             const channelName = `Team-${team.players.map(p => p.userId).join('-')}`;
             try {
@@ -111,6 +111,7 @@ async function matchmaking(serverId, client) {
                     name: channelName,
                     type: 2, // Discord voice channel type
                     parent: categoryId,
+                    userLimit: teamsize,// should be the same as the team size
                 });
                 logger.info(`Created voice channel ${channel.name} for team.`);
                 return channel;
@@ -151,7 +152,7 @@ async function matchmaking(serverId, client) {
                         matchedAt: Date.now()
                     };
                     // Create a voice channel and store it in the team object.
-                    const channel = await createVoiceChannel(guild, team);
+                    const channel = await createVoiceChannel(guild, team, team.mode);
                     if (channel) team.channel = channel;
                     matchedTeams.push(team);
                     logger.info(`Matched team for 4s in bracket ${bracket}: ${team.players.map(p => p.userId).join(', ')}`);
@@ -234,7 +235,7 @@ async function matchmaking(serverId, client) {
                                 matchedAt: Date.now()
                             };
 
-                            const channel = await createVoiceChannel(guild, team);
+                            const channel = await createVoiceChannel(guild, team, team.mode);
                             if (channel) team.channel = channel;
 
                             matchedTeams.push(team);
@@ -251,7 +252,7 @@ async function matchmaking(serverId, client) {
                         players: initialTeam,
                         matchedAt: Date.now()
                     };
-                    const channel = await createVoiceChannel(guild, team);
+                    const channel = await createVoiceChannel(guild, team, team.mode);
                     if (channel) team.channel = channel;
                     matchedTeams.push(team);
                     logger.info(`[MODE 3][BRACKET ${bracket}] Finalized team for 3s: ${team.players.map(p => p.userId).join(', ')}`);
@@ -338,7 +339,7 @@ async function matchmaking(serverId, client) {
                                 matchedAt: Date.now()
                             };
 
-                            const channel = await createVoiceChannel(guild, team);
+                            const channel = await createVoiceChannel(guild, team, team.mode);
                             if (channel) team.channel = channel;
 
                             matchedTeams.push(team);
@@ -355,7 +356,7 @@ async function matchmaking(serverId, client) {
                         players: initialTeam,
                         matchedAt: Date.now()
                     };
-                    const channel = await createVoiceChannel(guild, team);
+                    const channel = await createVoiceChannel(guild, team, team.mode);
                     if (channel) team.channel = channel;
                     matchedTeams.push(team);
                     logger.info(`[MODE 2][BRACKET ${bracket}] Finalized team for 2s: ${team.players.map(p => p.userId).join(', ')}`);
