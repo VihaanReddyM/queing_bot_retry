@@ -61,29 +61,33 @@ async function matchmaking(serverId, client) {
 
         // Eligibility functions – if not set, assume eligible.
         async function isEligibleFor3(player) {
-            const preferences = serverQueue.preferences || {};
-            logger.info(Array.from(preferences.entries())); // if preferences is a Map
-        
-            // Await the DB call to actually get the document.
             const serverQueueDoc = await ServerQueue.findById(serverId);
             if (!serverQueueDoc) {
                 logger.error(`Server queue not found for serverId: ${serverId}`);
                 return false;
             }
-            const userPreferences = serverQueueDoc.preferences ? serverQueueDoc.preferences[player.userId] || [] : [];
-            logger.info(userPreferences);
-            return userPreferences.includes("3");
-        }
-        
-        function isEligibleFor4(player) {
-            // get preferenvces from serverQueue
-            const preferences = serverQueue.preferences || {};
-            // get user preferences
-            const userPreferences = preferences[player.userId] || [];
-            // check if user has 4s preference
-            if (userPreferences.includes("4")) {
+            let userPreferences = serverQueue.preferences.get(player.userId) || ["2", "3", "4"];
+            if (userPreferences.includes("3")) {
+                logger.info(`User ${player.userId} has 3s preference`);
                 return true;
             } else {
+                logger.info(`User ${player.userId} does not have 3s preference`);
+                return false;
+            }
+        }
+
+        async function isEligibleFor4(player) {
+            const serverQueueDoc = await ServerQueue.findById(serverId);
+            if (!serverQueueDoc) {
+                logger.error(`Server queue not found for serverId: ${serverId}`);
+                return false;
+            }
+            let userPreferences = serverQueue.preferences.get(player.userId) || ["2", "3", "4"];
+            if (userPreferences.includes("4")) {
+                logger.info(`User ${player.userId} has 3s preference`);
+                return true;
+            } else {
+                logger.info(`User ${player.userId} does not have 3s preference`);
                 return false;
             }
         }
@@ -202,29 +206,44 @@ async function matchmaking(serverId, client) {
 
                     if (currentGroup.length >= 1) {
                         const candidate = currentGroup[0];
+
                         logger.info(
                             `[MODE 3][BRACKET ${bracket}] Checking eligibility for promotion: initial team: ${initialTeam.map(p => p.userId).join(', ')} candidate: ${candidate.userId}`
                         );
-                        if (initialTeam.every(p => isEligibleFor4(p)) && isEligibleFor4(candidate.userId)) {
+
+                        // Check eligibility for each player asynchronously
+                        const allEligible = (await Promise.all(initialTeam.map(p => isEligibleFor4(p)))).every(Boolean);
+                        const candidateEligibility = await isEligibleFor4(candidate);
+
+                        if (allEligible && candidateEligibility) {
+                            // Remove candidate from the mode 3 queue
                             serverQueue.queue["3"] = serverQueue.queue["3"].filter(p => p.userId !== candidate.userId);
                             logger.info(`[MODE 3][BRACKET ${bracket}] Promoting team to 4s by adding candidate ${candidate.userId}.`);
+
                             initialTeam.push(candidate);
-                            initialTeam.forEach(player => removePlayerFromAllQueues(player.userId));
+
+                            // Ensure all players are removed from other queues before proceeding
+                            for (const player of initialTeam) {
+                                await removePlayerFromAllQueues(player.userId);
+                            }
+
                             const team = {
                                 mode: "4", // promoted to a 4s team
                                 bracket,
                                 players: initialTeam,
                                 matchedAt: Date.now()
                             };
+
                             const channel = await createVoiceChannel(guild, team);
                             if (channel) team.channel = channel;
+
                             matchedTeams.push(team);
                             logger.info(`[MODE 3][BRACKET ${bracket}] Promoted team from 3s to 4s: ${team.players.map(p => p.userId).join(', ')}`);
-                            continue;
                         } else {
                             logger.info(`[MODE 3][BRACKET ${bracket}] Candidate ${candidate.userId} did not pass eligibility.`);
                         }
                     }
+
                     initialTeam.forEach(player => removePlayerFromAllQueues(player.userId));
                     const team = {
                         mode: "3",
@@ -286,36 +305,49 @@ async function matchmaking(serverId, client) {
                         return p.bracket === bracket && !initialTeam.some(q => q.userId === p.userId);
                     });
                     logger.info(`[MODE 2][BRACKET ${bracket}] Found ${currentGroup.length} candidate(s) for promotion.`);
-                    
+
                     if (currentGroup.length >= 1) {
                         const candidate = currentGroup[0];
-                        // Log detailed eligibility
-                        initialTeam.forEach(p => {
-                            logger.info(`[MODE 2][BRACKET ${bracket}] Player ${p.userId} eligibility for 3s: ${isEligibleFor3(p)}`);
-                        });
-                        logger.info(`[MODE 2][BRACKET ${bracket}] Candidate ${candidate.userId} eligibility for 3s: ${isEligibleFor3(candidate.userId)}`);
-                        
-                        if (initialTeam.every(p => isEligibleFor3(p)) && isEligibleFor3(candidate.userId)) {
+
+                        // Log detailed eligibility using await inside a loop
+                        for (const p of initialTeam) {
+                            const isEligible = await isEligibleFor3(p);
+                            logger.info(`[MODE 2][BRACKET ${bracket}] Player ${p.userId} eligibility for 3s: ${isEligible}`);
+                        }
+
+                        const candidateEligibility = await isEligibleFor3(candidate);
+                        logger.info(`[MODE 2][BRACKET ${bracket}] Candidate ${candidate.userId} eligibility for 3s: ${candidateEligibility}`);
+
+                        // Check eligibility properly using await inside every() by mapping promises and awaiting the result
+                        const allEligible = (await Promise.all(initialTeam.map(p => isEligibleFor3(p)))).every(Boolean);
+
+                        if (allEligible && candidateEligibility) {
                             // Remove candidate from the in-memory mode 2 queue.
                             serverQueue.queue["2"] = serverQueue.queue["2"].filter(p => p.userId !== candidate.userId);
                             logger.info(`[MODE 2][BRACKET ${bracket}] Promoting team to 3s by adding candidate ${candidate.userId}.`);
+
                             initialTeam.push(candidate);
-                            initialTeam.forEach(player => removePlayerFromAllQueues(player.userId));
+                            for (const player of initialTeam) {
+                                await removePlayerFromAllQueues(player.userId);
+                            }
+
                             const team = {
                                 mode: "3", // promoted to a 3s team
                                 bracket,
                                 players: initialTeam,
                                 matchedAt: Date.now()
                             };
+
                             const channel = await createVoiceChannel(guild, team);
                             if (channel) team.channel = channel;
+
                             matchedTeams.push(team);
                             logger.info(`[MODE 2][BRACKET ${bracket}] Promoted team from 2s to 3s: ${team.players.map(p => p.userId).join(', ')}`);
-                            continue;
                         } else {
                             logger.info(`[MODE 2][BRACKET ${bracket}] Candidate ${candidate.userId} did not pass eligibility.`);
                         }
                     }
+
                     initialTeam.forEach(player => removePlayerFromAllQueues(player.userId));
                     const team = {
                         mode: "2",
