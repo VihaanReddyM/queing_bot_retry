@@ -56,7 +56,7 @@ async function matchmaking(serverId, client) {
 
         // Random integer between min and max (inclusive)
         function randomBetween(min, max) {
-            logger.info(`Generating random number between ${min} and ${max}`);
+            logger.debug(`Generating random number between ${min} and ${max}`);
             return Math.floor(Math.random() * (max - min + 1)) + min;
         }
 
@@ -69,10 +69,10 @@ async function matchmaking(serverId, client) {
             }
             let userPreferences = serverQueue.preferences.get(player.userId) || ["2", "3", "4"];
             if (userPreferences.includes("3")) {
-                logger.info(`User ${player.userId} has 3s preference`);
+                logger.debug(`User ${player.userId} has 3s preference`);
                 return true;
             } else {
-                logger.info(`User ${player.userId} does not have 3s preference`);
+                logger.debug(`User ${player.userId} does not have 3s preference`);
                 return false;
             }
         }
@@ -85,17 +85,17 @@ async function matchmaking(serverId, client) {
             }
             let userPreferences = serverQueue.preferences.get(player.userId) || ["2", "3", "4"];
             if (userPreferences.includes("4")) {
-                logger.info(`User ${player.userId} has 3s preference`);
+                logger.debug(`User ${player.userId} has 3s preference`);
                 return true;
             } else {
-                logger.info(`User ${player.userId} does not have 3s preference`);
+                logger.debug(`User ${player.userId} does not have 3s preference`);
                 return false;
             }
         }
 
         // Remove a player from all queues (so they cannot be matched twice).
         function removePlayerFromAllQueues(playerId) {
-            logger.info(`Removing player ${playerId} from all queues`);
+            logger.debug(`Removing player ${playerId} from all queues`);
             ["2", "3", "4"].forEach(mode => {
                 if (serverQueue.queue[mode]) {
                     serverQueue.queue[mode] = serverQueue.queue[mode].filter(p => p.userId !== playerId);
@@ -114,7 +114,7 @@ async function matchmaking(serverId, client) {
                     parent: categoryId,
                     userLimit: teamsize,// should be the same as the team size
                 });
-                logger.info(`Created voice channel ${channel.name} for team.`);
+                logger.debug(`Created voice channel ${channel.name} for team.`);
                 return channel;
             } catch (err) {
                 logger.error(`Error creating voice channel: ${err.message}`);
@@ -125,12 +125,12 @@ async function matchmaking(serverId, client) {
         function isPlayerStillAvailable(player, mode) {
             const member = guild.members.cache.get(player.userId);
             if (!member) {
-                logger.info(`Member ${player.userId} is no longer in the guild.`);
+                logger.debug(`Member ${player.userId} is no longer in the guild.`);
                 return false;
             }
             const unserIndex = serverQueue.queue[mode].findIndex(p => p.userId === player.userId);
             if (unserIndex === -1) {
-                logger.info(`Member ${player.userId} is no longer in the queue.`);
+                logger.debug(`Member ${player.userId} is no longer in the queue.`);
                 return false;
             }
             return true;
@@ -170,7 +170,7 @@ async function matchmaking(serverId, client) {
                     const channel = await createVoiceChannel(guild, team, team.mode);
                     if (channel) team.channel = channel;
                     matchedTeams.push(team);
-                    logger.info(`Matched team for 4s in bracket ${bracket}: ${team.players.map(p => p.userId).join(', ')}`);
+                    logger.debug(`Matched team for 4s in bracket ${bracket}: ${team.players.map(p => p.userId).join(', ')}`);
                 }
             }
         }
@@ -186,34 +186,34 @@ async function matchmaking(serverId, client) {
                 if (group.length < 3) break;
         
                 const initialTeam = group.splice(0, 3);
-                logger.info(`[MODE 3][BRACKET ${bracket}] Selected initial team: ${initialTeam.map(p => p.userId).join(', ')}`);
+                logger.debug(`[MODE 3][BRACKET ${bracket}] Selected initial team: ${initialTeam.map(p => p.userId).join(', ')}`);
         
                 serverQueue.queue["3"] = serverQueue.queue["3"].filter(p => !initialTeam.some(q => q.userId === p.userId));
         
                 const waitTime = randomBetween(10, 20) * 1000;
-                logger.info(`[MODE 3][BRACKET ${bracket}] Waiting ${waitTime / 1000} seconds for promotion.`);
+                logger.debug(`[MODE 3][BRACKET ${bracket}] Waiting ${waitTime / 1000} seconds for promotion.`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
         
                 const updatedQueueDoc = await ServerQueue.findById(serverId); // Make sure serverId is defined
                 serverQueue.queue["3"] = updatedQueueDoc.queue["3"] || [];
-                logger.info(`[MODE 3][BRACKET ${bracket}] After wait, updated mode3 queue length: ${serverQueue.queue["3"].length}`);
+                logger.debug(`[MODE 3][BRACKET ${bracket}] After wait, updated mode3 queue length: ${serverQueue.queue["3"].length}`);
         
                 let currentGroup = (serverQueue.queue["3"] || []).filter(p => {
                     p.bracket = getBracket(p.statNumber, p.stars);
                     return p.bracket === bracket && !initialTeam.some(q => q.userId === p.userId);
                 });
-                logger.info(`[MODE 3][BRACKET ${bracket}] Found ${currentGroup.length} candidate(s) for promotion.`);
+                logger.debug(`[MODE 3][BRACKET ${bracket}] Found ${currentGroup.length} candidate(s) for promotion.`);
         
                 if (currentGroup.length >= 1) {
                     const candidate = currentGroup[0];
-                    logger.info(`[MODE 3][BRACKET ${bracket}] Checking eligibility for promotion: initial team: ${initialTeam.map(p => p.userId).join(', ')} candidate: ${candidate.userId}`);
+                    logger.debug(`[MODE 3][BRACKET ${bracket}] Checking eligibility for promotion: initial team: ${initialTeam.map(p => p.userId).join(', ')} candidate: ${candidate.userId}`);
         
                     const allEligible = (await Promise.all(initialTeam.map(p => isEligibleFor4(p)))).every(Boolean);
                     const candidateEligibility = await isEligibleFor4(candidate);
         
                     if (allEligible && candidateEligibility) {
                         serverQueue.queue["3"] = serverQueue.queue["3"].filter(p => p.userId !== candidate.userId);
-                        logger.info(`[MODE 3][BRACKET ${bracket}] Promoting team to 4s by adding candidate ${candidate.userId}.`);
+                        logger.debug(`[MODE 3][BRACKET ${bracket}] Promoting team to 4s by adding candidate ${candidate.userId}.`);
                         initialTeam.push(candidate);
         
                         await Promise.all(initialTeam.map(player => removePlayerFromAllQueues(player.userId)));
@@ -229,16 +229,16 @@ async function matchmaking(serverId, client) {
                         if (channel) team.channel = channel;
         
                         matchedTeams.push(team);
-                        logger.info(`[MODE 3][BRACKET ${bracket}] Promoted team from 3s to 4s: ${team.players.map(p => p.userId).join(', ')}`);
+                        logger.debug(`[MODE 3][BRACKET ${bracket}] Promoted team from 3s to 4s: ${team.players.map(p => p.userId).join(', ')}`);
                     } else {
-                        logger.info(`[MODE 3][BRACKET ${bracket}] Candidate ${candidate.userId} did not pass eligibility.`);
+                        logger.debug(`[MODE 3][BRACKET ${bracket}] Candidate ${candidate.userId} did not pass eligibility.`);
                     }
                 }
         
                 let playerUnavailable = false;
                 for (const player of initialTeam) {
                     if (!isPlayerStillAvailable(player, "3")) {
-                        logger.info(`Player ${player.userId} is no longer available, cancelling matching.`);
+                        logger.debug(`Player ${player.userId} is no longer available, cancelling matching.`);
                         playerUnavailable = true;
                         break;
                     }
@@ -261,7 +261,7 @@ async function matchmaking(serverId, client) {
                 if (channel) team.channel = channel;
         
                 matchedTeams.push(team);
-                logger.info(`[MODE 3][BRACKET ${bracket}] Finalized team for 3s: ${team.players.map(p => p.userId).join(', ')}`);
+                logger.debug(`[MODE 3][BRACKET ${bracket}] Finalized team for 3s: ${team.players.map(p => p.userId).join(', ')}`);
             }
         }
 
@@ -299,34 +299,34 @@ async function matchmaking(serverId, client) {
                     if (group.length < 2) break;
 
                     const initialTeam = group.splice(0, 2);
-                    logger.info(`[MODE 2][BRACKET ${bracket}] Selected initial team: ${initialTeam.map(p => p.userId).join(', ')}`);
+                    logger.debug(`[MODE 2][BRACKET ${bracket}] Selected initial team: ${initialTeam.map(p => p.userId).join(', ')}`);
 
                     serverQueue.queue["2"] = serverQueue.queue["2"].filter(p => !initialTeam.some(q => q.userId === p.userId));
 
                     const waitTime = randomBetween(10, 20) * 1000;
-                    logger.info(`[MODE 2][BRACKET ${bracket}] Waiting ${waitTime / 1000} seconds for promotion.`);
+                    logger.debug(`[MODE 2][BRACKET ${bracket}] Waiting ${waitTime / 1000} seconds for promotion.`);
                     await new Promise(resolve => setTimeout(resolve, waitTime));
 
                     const updatedQueueDoc = await ServerQueue.findById(serverId);
                     serverQueue.queue["2"] = updatedQueueDoc.queue["2"] || [];
-                    logger.info(`[MODE 2][BRACKET ${bracket}] After wait, updated mode2 queue length: ${serverQueue.queue["2"].length}`);
+                    logger.debug(`[MODE 2][BRACKET ${bracket}] After wait, updated mode2 queue length: ${serverQueue.queue["2"].length}`);
 
                     let currentGroup = (serverQueue.queue["2"] || []).filter(p => {
                         p.bracket = getBracket(p.statNumber, p.stars);
                         return p.bracket === bracket && !initialTeam.some(q => q.userId === p.userId);
                     });
-                    logger.info(`[MODE 2][BRACKET ${bracket}] Found ${currentGroup.length} candidate(s) for promotion.`);
+                    logger.debug(`[MODE 2][BRACKET ${bracket}] Found ${currentGroup.length} candidate(s) for promotion.`);
 
                     if (currentGroup.length >= 1) {
                         const candidate = currentGroup[0];
-                        logger.info(`[MODE 2][BRACKET ${bracket}] Checking eligibility for promotion: initial team: ${initialTeam.map(p => p.userId).join(', ')} candidate: ${candidate.userId}`);
+                        logger.debug(`[MODE 2][BRACKET ${bracket}] Checking eligibility for promotion: initial team: ${initialTeam.map(p => p.userId).join(', ')} candidate: ${candidate.userId}`);
 
                         const allEligible = (await Promise.all(initialTeam.map(p => isEligibleFor3(p)))).every(Boolean);
                         const candidateEligibility = await isEligibleFor3(candidate);
 
                         if (allEligible && candidateEligibility) {
                             serverQueue.queue["2"] = serverQueue.queue["2"].filter(p => p.userId !== candidate.userId);
-                            logger.info(`[MODE 2][BRACKET ${bracket}] Promoting team to 3s by adding candidate ${candidate.userId}.`);
+                            logger.debug(`[MODE 2][BRACKET ${bracket}] Promoting team to 3s by adding candidate ${candidate.userId}.`);
                             initialTeam.push(candidate);
 
                             await Promise.all(initialTeam.map(player => removePlayerFromAllQueues(player.userId)));
@@ -342,16 +342,16 @@ async function matchmaking(serverId, client) {
                             if (channel) team.channel = channel;
 
                             matchedTeams.push(team);
-                            logger.info(`[MODE 2][BRACKET ${bracket}] Promoted team from 2s to 3s: ${team.players.map(p => p.userId).join(', ')}`);
+                            logger.debug(`[MODE 2][BRACKET ${bracket}] Promoted team from 2s to 3s: ${team.players.map(p => p.userId).join(', ')}`);
                         } else {
-                            logger.info(`[MODE 2][BRACKET ${bracket}] Candidate ${candidate.userId} did not pass eligibility.`);
+                            logger.debug(`[MODE 2][BRACKET ${bracket}] Candidate ${candidate.userId} did not pass eligibility.`);
                         }
                     }
 
                     let playerUnavailable = false;
                     for (const player of initialTeam) {
                         if (!isPlayerStillAvailable(player, "2")) {
-                            logger.info(`Player ${player.userId} is no longer available, cancelling matching.`);
+                            logger.debug(`Player ${player.userId} is no longer available, cancelling matching.`);
                             playerUnavailable = true;
                             break;
                         }
@@ -374,7 +374,7 @@ async function matchmaking(serverId, client) {
                     if (channel) team.channel = channel;
 
                     matchedTeams.push(team);
-                    logger.info(`[MODE 2][BRACKET ${bracket}] Finalized team for 2s: ${team.players.map(p => p.userId).join(', ')}`);
+                    logger.debug(`[MODE 2][BRACKET ${bracket}] Finalized team for 2s: ${team.players.map(p => p.userId).join(', ')}`);
                 }
             }
 
@@ -385,7 +385,7 @@ async function matchmaking(serverId, client) {
 
         // Log all matched teams.
         matchedTeams.forEach(team => {
-            logger.info(`Final matched team for mode ${team.mode} in bracket ${team.bracket}: ${team.players.map(p => p.userId).join(', ')}`);
+            logger.debug(`Final matched team for mode ${team.mode} in bracket ${team.bracket}: ${team.players.map(p => p.userId).join(', ')}`);
         });
 
         // Save the updated queue using updateOne()
@@ -408,10 +408,10 @@ async function matchmaking(serverId, client) {
                         // only then can we move them.
                         if (member.voice.channel) {
                             await member.voice.setChannel(team.channel.id);
-                            logger.info(`Moved ${member.user.tag} to ${team.channel.name}`);
+                            logger.debug(`Moved ${member.user.tag} to ${team.channel.name}`);
                         } else {
                             // Optionally, you could send them a DM or a notification asking them to join.
-                            logger.info(`Member ${member.user.tag} is not in a voice channel and cannot be moved automatically.`);
+                            logger.debug(`Member ${member.user.tag} is not in a voice channel and cannot be moved automatically.`);
                         }
                     } catch (err) {
                         logger.error(`Failed to move member ${player.userId}: ${err.message}`);

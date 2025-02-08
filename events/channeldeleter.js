@@ -13,11 +13,11 @@ module.exports = {
 
         if (oldState.channelId && oldState.channelId !== newState.channelId) {
             // User left or switched channels
-            logger.info(`User ${user.tag} left channel ${oldState.channelId}`);
+            logger.debug(`User ${user.tag} left channel ${oldState.channelId}`);
             let serverQueue = await ServerQueue.findById(serverId);
 
             if (!serverQueue) {
-                logger.info('No serverQueue found, creating a new one');
+                logger.debug('No serverQueue found, creating a new one');
                 serverQueue = new ServerQueue({
                     _id: serverId,
                     serverName: guild.name,
@@ -42,7 +42,7 @@ module.exports = {
             const oldChannel = guild.channels.cache.get(oldState.channelId);
             if (oldChannel && oldChannel.parentId === serverQueue.category) {
                 if (oldChannel.members.size === 0) {
-                    logger.info(`Deleting empty voice channel: ${oldChannel.name}`);
+                    logger.debug(`Deleting empty voice channel: ${oldChannel.name}`);
                     await oldChannel.delete().catch(err => logger.error(`Error deleting channel: ${err}`));
                 }
             }

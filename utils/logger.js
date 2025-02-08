@@ -33,4 +33,11 @@ logger.error = function (err) {
     fs.appendFileSync('logs.log', logMessage + '\n');
 };
 
+logger.debug = function (message) {
+    let date = new Date();
+    let stack = new Error().stack.split('\n')[2].trim();
+    let log = `[${date.toISOString()}] [DEBUG] ${message} (from ${stack})`;
+    fs.appendFileSync('debug.log', log + '\n');
+};
+
 module.exports = logger;

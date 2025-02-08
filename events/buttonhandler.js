@@ -80,8 +80,8 @@ module.exports = {
                 if (!userStat) {
                     const statNumber = await getBedwarsStats(nickname);
                     const stars = await getstars(nickname); // Fetch stars data
-                    logger.info(`Fetched stat number for ${nickname}: ${statNumber}`);
-                    logger.info(`Fetched stars for ${nickname}: ${stars}`);
+                    logger.debug(`Fetched stat number for ${nickname}: ${statNumber}`);
+                    logger.debug(`Fetched stars for ${nickname}: ${stars}`);
 
                     // Check if statNumber and stars are valid (i.e., not 0 or NaN)
                     if (statNumber <= 0 || isNaN(statNumber) || stars <= 0 || isNaN(stars)) {
@@ -101,7 +101,7 @@ module.exports = {
                     });
 
                     userStat = { userId: UUID, statNumber, stars }; // Set the fetched statNumber and stars for the user
-                    logger.info("New user and his stats are: ", userStat);
+                    logger.debug("New user and his stats are: ", userStat);
                 }
 
                 let wasInQueue = false;
@@ -207,7 +207,7 @@ module.exports = {
                     .setDescription(`You can't edit your preferences while in queue.`)
                     .setColor('#FF0000');
 
-                logger.info(`User ${user.username} tried to edit preferences while in queue.`);
+                logger.debug(`User ${user.username} tried to edit preferences while in queue.`);
                 return await interaction.reply({ embeds: [embed], flags: 64 });
             }
 

@@ -1,4 +1,5 @@
 const axios = require('axios');
+const logger = require('./logger');
 
 async function getUUID(username) {
   try {
@@ -6,7 +7,7 @@ async function getUUID(username) {
       const uuid = response.data.id;
       return uuid;
   } catch (error) {
-      console.error(`Error fetching UUID for ${username}:`, error);
+      logger.error(`Error fetching UUID for ${username}:`, error);
   }
 }
 
