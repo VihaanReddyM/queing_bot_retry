@@ -10,6 +10,18 @@ const matchmaking = require('./utils/matchmaking');
 // Connect to MongoDB
 connectDB();
 
+/**
+ * Creates a new instance of the Client with specified intents.
+ * 
+ * @constant
+ * @type {Client}
+ * @param {Object} options - The options for the client.
+ * @param {Array} options.intents - The intents for the client.
+ * @param {number} options.intents.Guilds - Intent for guilds.
+ * @param {number} options.intents.GuildMessages - Intent for guild messages.
+ * @param {number} options.intents.GuildMembers - Intent for guild members.
+ * @param {number} options.intents.GuildVoiceStates - Intent for guild voice states.
+ */
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -58,6 +70,16 @@ client.login(data.token);
 let isMatchmakingRunning = false;
 
 // Function to start listening to database changes (using Mongoose change streams)
+/**
+ * Starts listening to changes in the database and triggers matchmaking when a change is detected.
+ * 
+ * This function sets up a change stream on the `ServerQueue` collection and listens for changes.
+ * When a change is detected, it triggers the matchmaking process if it is not already running.
+ * 
+ * @function
+ * @async
+ * @returns {void}
+ */
 const startListeningToDatabaseChanges = () => {
     const changeStream = ServerQueue.watch();
 

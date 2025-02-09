@@ -1,10 +1,10 @@
-const { REST, Routes } = require('discord.js');
-const fs = require('node:fs');
-const path = require('node:path');
+import { REST, Routes } from 'discord.js';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
-const config = require('./data/config.json');
+import config, { clientid as _clientid, token as _token } from './data/config.json';
 
-if (!config.clientid || !config.token) {
+if (!_clientid || !_token) {
   console.error('Missing required configuration properties.');
   process.exit(1);
 }
@@ -13,14 +13,14 @@ const { clientid, token } = config;
 
 const commands = [];
 // Grab all the command folders from the commands directory
-const foldersPath = path.join(__dirname, 'commands');
-const commandFolders = fs.readdirSync(foldersPath);
+const foldersPath = join(__dirname, 'commands');
+const commandFolders = readdirSync(foldersPath);
 
 for (const folder of commandFolders) {
-    const commandsPath = path.join(foldersPath, folder);
-    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+    const commandsPath = join(foldersPath, folder);
+    const commandFiles = readdirSync(commandsPath).filter(file => file.endsWith('.js'));
     for (const file of commandFiles) {
-        const filePath = path.join(commandsPath, file);
+        const filePath = join(commandsPath, file);
         const command = require(filePath);
         // Set a new item in the Collection with the key as the command name and the value as the exported module
         if ('data' in command && 'execute' in command) {
